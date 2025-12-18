@@ -63,6 +63,7 @@ class Composite {
             ctx.fill()
         }
 
+
         let totalCOM = this.centreOfMass().add(offset).add(this.position)
         ctx.fillStyle = "red"
         ctx.beginPath()
@@ -104,9 +105,10 @@ class Composite {
         for (let f of this.appliedForces) {
             totalForce = totalForce.add(f.direction)
         }
+        console.log("vert force: ", totalForce.y)
 
         // calculate acceleration
-        let acceleration = new Vector2(totalForce.x * this.mass(), totalForce.y * this.mass())
+        let acceleration = new Vector2(totalForce.x / this.mass(), totalForce.y / this.mass())
         this.velocity = this.velocity.add(acceleration.multiplyScalar(dt))
         
 
@@ -144,8 +146,8 @@ class Line implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.moveTo((this.from.x + offset.x) * scaleX, (this.from.y + offset.y) * scaleY)
-        ctx.lineTo((this.to.x + offset.x) * scaleX, (this.to.y + offset.y) * scaleY)
+        ctx.moveTo(this.from.x * scaleX + offset.x, -(this.from.y * scaleY + offset.y))
+        ctx.lineTo(this.to.x * scaleX + offset.x, -(this.to.y * scaleY + offset.y))
         ctx.stroke()
         ctx.closePath()
         return null
@@ -177,10 +179,9 @@ class Ellipse implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.ellipse((this.centre.x + offset.x) * scaleX, (this.centre.y + offset.y) * scaleY, this.radius.x * scaleX, this.radius.y * scaleY, 0, 0, 360)
+        ctx.ellipse(this.centre.x * scaleX + offset.x, -(this.centre.y * scaleY + offset.y), this.radius.x * scaleX, this.radius.y * scaleY, 0, 0, 360)
         ctx.stroke()
         ctx.closePath()
-        console.log(this.centre.y, (this.centre.y + offset.y) * scaleY)
         return null
     }
 
@@ -203,7 +204,7 @@ class Ellipse implements Shape {
 var scaleX = 100; // 500 pixels per metre
 var scaleY = 100; // 500 pixels per metre
 
-var transform = new Vector2(1, -2) // in metres
+var transform = new Vector2(0, 0) // in metres
 
 
 export class Renderer {
@@ -215,15 +216,15 @@ export class Renderer {
         //     // new Ellipse(new Vector2(100, 200), new Vector2(50, 50), 1),
         // ),
 
-        new Composite(new Vector2(1,0),
-            new Line(new Vector2(0,0), new Vector2(1,1), 1),
-            new Ellipse(new Vector2(1, 1), new Vector2(1, 1), 1),
-            new Ellipse(new Vector2(1, 2), new Vector2(0.5, 0.5), 1),
+        new Composite(new Vector2(0,0),
+            // new Line(new Vector2(0,0), new Vector2(1,1), 1),
+            new Ellipse(new Vector2(0, 0), new Vector2(1, 1), 1),
+            // new Ellipse(new Vector2(1, 2), new Vector2(0.5, 0.5), 1),
 
 
-            new Composite(new Vector2(0,0),
-                new Line(new Vector2(0,0), new Vector2(1,0.5), 1),
-            )
+            // new Composite(new Vector2(0,0),
+            //     new Line(new Vector2(0,0), new Vector2(1,0.5), 1),
+            // )
         )
         
     ]
@@ -236,13 +237,15 @@ export class Renderer {
     
     lt = 0
     draw(t: number) {
+        transform.x = this.ctx.canvas.width/2
+        transform.y = -this.ctx.canvas.height/2
         let dt = (t - this.lt) / (60 * 1000)
         this.lt = t
         this.ctx.clearRect(0,0, this.ctx.canvas.width, this.ctx.canvas.height)
         for (let i of this.shapes) {
             i.draw(this.ctx, transform)
         }
-        // this.physicsStep(dt)
+        this.physicsStep(dt)
         requestAnimationFrame((t)=>this.draw(t))
     }
 
@@ -254,12 +257,13 @@ export class Renderer {
 
 
         for (let i of this.shapes) {
+            let f = -9.8 * i.mass()
             i.appliedForces = [{
-                direction: new Vector2(0 -9.8 * i.mass()),
+                direction: new Vector2(0, f),
 
                 position: i.centreOfMass()
             }]
-            console.log(9.8 * i.mass())
+            console.log("mass:", f)
             i.physicsStep(dt)
         }
     }

@@ -9,7 +9,7 @@ const r = new Renderer(ctx)
 
 const app = new container(
     new header1("Centre of Mass Visualiser"),
-    c.addStyle("width: calc(100% - 4em); aspect-ratio: 16 / 9; margin: 2em; max-height: 60vh;"),
+    c.addStyle("width: calc(100% - 4em); height: 60vh; margin: 2em; max-height: 60vh;"),
     
 )
 
