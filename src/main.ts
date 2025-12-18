@@ -19,12 +19,12 @@ renderApp(app, document.getElementById("app")!)
 
 c.htmlNode.width = c.htmlNode.clientWidth
 c.htmlNode.height = c.htmlNode.clientHeight
-ctx.translate(0.5, 0.5);
+// ctx.translate(0.5, 0.5);
 
 document.addEventListener("resize", () => {
-    c.htmlNode.width = c.htmlNode.clientWidth * 10
-    c.htmlNode.height = c.htmlNode.clientHeight * 10
-    ctx.translate(0.5, 0.5);
+    c.htmlNode.width = c.htmlNode.clientWidth
+    c.htmlNode.height = c.htmlNode.clientHeight
+    // ctx.translate(0.5, 0.5);
 })
 
 

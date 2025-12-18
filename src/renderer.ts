@@ -19,6 +19,10 @@ class Vector2 {
     add(a: Vector2) {
         return new Vector2(this.x + a.x, this.y + a.y)
     }
+
+    multiplyScalar(a: number) {
+        return new Vector2(this.x * a, this.y * a)
+    }
 }
 
 interface Shape {
@@ -48,20 +52,21 @@ class Composite {
     shapes: (Composite | Shape)[] = []
     position: Vector2
     rotation: number = 0 // about the centre of mass
+    velocity: Vector2 = new Vector2()
     draw(ctx: CanvasRenderingContext2D, offset: Vector2): Error | null {
         for (let i of this.shapes) {
             i.draw(ctx, offset.add(this.position))
             let com = i.centreOfMass().add(offset).add(this.position)
             ctx.fillStyle = "orange"
             ctx.beginPath()
-            ctx.ellipse(com.x, com.y, 2, 2, 0, 0, 360)
+            ctx.ellipse(com.x, -com.y, 2, 2, 0, 0, 360)
             ctx.fill()
         }
 
         let totalCOM = this.centreOfMass().add(offset).add(this.position)
         ctx.fillStyle = "red"
         ctx.beginPath()
-        ctx.ellipse(totalCOM.x, totalCOM.y, 5, 5, 0, 0, 360)
+        ctx.ellipse(totalCOM.x, -totalCOM.y, 5, 5, 0, 0, 360)
         ctx.fill()
         return null
     }
@@ -87,13 +92,26 @@ class Composite {
     }
 
     physicsStep(dt: number) {
-        // calculate moments 
+        // calculate moments about com
         let com = this.centreOfMass()
-        let totalMoment = 0; // about com
+        let totalMoment = 0;
         for (let f of this.appliedForces) {
-            totalMoment = Math.abs(f.position.x - com.x) * f.direction.x
+            totalMoment += Math.abs(f.position.x - com.x) * f.direction.x
         }
+
+        // calculate vertical forces
+        let totalForce = new Vector2();
+        for (let f of this.appliedForces) {
+            totalForce = totalForce.add(f.direction)
+        }
+
+        // calculate acceleration
+        let acceleration = new Vector2(totalForce.x * this.mass(), totalForce.y * this.mass())
+        this.velocity = this.velocity.add(acceleration.multiplyScalar(dt))
         
+
+        // update position
+        this.position = this.position.add(this.velocity.multiplyScalar(dt))
         for (let i of this.shapes) {
             if (i.type == "composite") {
                 (i as Composite).physicsStep(dt)
@@ -108,7 +126,7 @@ class Composite {
         compositeIndex++
         this.appliedForces = [
             {
-                direction: new Vector2(0 -9.81),
+                direction: new Vector2(0, -9.81),
                 position: this.centreOfMass()
             }
         ]
@@ -126,8 +144,8 @@ class Line implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.moveTo(this.from.x + offset.x, this.from.y + offset.y)
-        ctx.lineTo(this.to.x + offset.x, this.to.y + offset.y)
+        ctx.moveTo((this.from.x + offset.x) * scaleX, (this.from.y + offset.y) * scaleY)
+        ctx.lineTo((this.to.x + offset.x) * scaleX, (this.to.y + offset.y) * scaleY)
         ctx.stroke()
         ctx.closePath()
         return null
@@ -159,9 +177,10 @@ class Ellipse implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.ellipse(this.centre.x + offset.x, this.centre.y + offset.y, this.radius.x, this.radius.y, 0, 0, 360)
+        ctx.ellipse((this.centre.x + offset.x) * scaleX, (this.centre.y + offset.y) * scaleY, this.radius.x * scaleX, this.radius.y * scaleY, 0, 0, 360)
         ctx.stroke()
         ctx.closePath()
+        console.log(this.centre.y, (this.centre.y + offset.y) * scaleY)
         return null
     }
 
@@ -181,7 +200,10 @@ class Ellipse implements Shape {
     }
 }
 
+var scaleX = 100; // 500 pixels per metre
+var scaleY = 100; // 500 pixels per metre
 
+var transform = new Vector2(1, -2) // in metres
 
 
 export class Renderer {
@@ -193,14 +215,14 @@ export class Renderer {
         //     // new Ellipse(new Vector2(100, 200), new Vector2(50, 50), 1),
         // ),
 
-        new Composite(new Vector2(100,0),
-            new Line(new Vector2(0,0), new Vector2(100,100), 1),
-            new Ellipse(new Vector2(100, 100), new Vector2(100, 100), 1),
-            new Ellipse(new Vector2(100, 200), new Vector2(50, 50), 1),
+        new Composite(new Vector2(1,0),
+            new Line(new Vector2(0,0), new Vector2(1,1), 1),
+            new Ellipse(new Vector2(1, 1), new Vector2(1, 1), 1),
+            new Ellipse(new Vector2(1, 2), new Vector2(0.5, 0.5), 1),
 
 
             new Composite(new Vector2(0,0),
-                new Line(new Vector2(0,0), new Vector2(100,5), 1),
+                new Line(new Vector2(0,0), new Vector2(1,0.5), 1),
             )
         )
         
@@ -212,17 +234,32 @@ export class Renderer {
     }
 
     
-
-    draw(dt: number) {
+    lt = 0
+    draw(t: number) {
+        let dt = (t - this.lt) / (60 * 1000)
+        this.lt = t
         this.ctx.clearRect(0,0, this.ctx.canvas.width, this.ctx.canvas.height)
         for (let i of this.shapes) {
-            i.draw(this.ctx, new Vector2())
+            i.draw(this.ctx, transform)
         }
-        requestAnimationFrame((dt)=>this.draw(dt))
+        // this.physicsStep(dt)
+        requestAnimationFrame((t)=>this.draw(t))
     }
 
     physicsStep(dt: number) {
+        // need to see what forces need to be applied
+        
+
+
+
+
         for (let i of this.shapes) {
+            i.appliedForces = [{
+                direction: new Vector2(0 -9.8 * i.mass()),
+
+                position: i.centreOfMass()
+            }]
+            console.log(9.8 * i.mass())
             i.physicsStep(dt)
         }
     }
