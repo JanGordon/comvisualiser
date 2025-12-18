@@ -1,29 +1,8 @@
 import { textInput } from "kleinui/elements"
+import { simulationStatus } from "./main"
+import { Vector2 } from "./utils"
 
-class Vector2 {
-    x: number
-    y: number
-    constructor(x?: number, y?: number) {
-        this.x = x ? x : 0
-        this.y = y ? y : 0
-    }
 
-    copy() {
-        return new Vector2(this.x, this.y)
-    }
-
-    length() {
-        return Math.sqrt(this.x * this.x + this.y * this.y)
-    }
-
-    add(a: Vector2) {
-        return new Vector2(this.x + a.x, this.y + a.y)
-    }
-
-    multiplyScalar(a: number) {
-        return new Vector2(this.x * a, this.y * a)
-    }
-}
 
 interface Shape {
     type: string
@@ -46,12 +25,16 @@ type Force = {
 }
 
 class Composite {
+    fixed: boolean
     appliedForces: Force[]
     type = "composite"
     name: string
     shapes: (Composite | Shape)[] = []
+    initialPosition: Vector2
     position: Vector2
+    initialRotation: number = 0
     rotation: number = 0 // about the centre of mass
+    initialVelocity: Vector2 = new Vector2()
     velocity: Vector2 = new Vector2()
     draw(ctx: CanvasRenderingContext2D, offset: Vector2): Error | null {
         for (let i of this.shapes) {
@@ -59,7 +42,7 @@ class Composite {
             let com = i.centreOfMass().add(offset).add(this.position)
             ctx.fillStyle = "orange"
             ctx.beginPath()
-            ctx.ellipse(com.x, -com.y, 2, 2, 0, 0, 360)
+            ctx.ellipse(com.x * scaleX, -com.y * scaleY, 2, 2, 0, 0, 360)
             ctx.fill()
         }
 
@@ -67,7 +50,7 @@ class Composite {
         let totalCOM = this.centreOfMass().add(offset).add(this.position)
         ctx.fillStyle = "red"
         ctx.beginPath()
-        ctx.ellipse(totalCOM.x, -totalCOM.y, 5, 5, 0, 0, 360)
+        ctx.ellipse(totalCOM.x * scaleX, -totalCOM.y * scaleY, 5, 5, 0, 0, 360)
         ctx.fill()
         return null
     }
@@ -76,6 +59,7 @@ class Composite {
         let weightedCOM = new Vector2()
         for (let i of this.shapes) {
             let m = i.mass()
+            console.log(m)
             let com = i.centreOfMass()
             totalMass += m
             weightedCOM.x += m * com.x
@@ -105,15 +89,16 @@ class Composite {
         for (let f of this.appliedForces) {
             totalForce = totalForce.add(f.direction)
         }
-        console.log("vert force: ", totalForce.y)
 
-        // calculate acceleration
-        let acceleration = new Vector2(totalForce.x / this.mass(), totalForce.y / this.mass())
-        this.velocity = this.velocity.add(acceleration.multiplyScalar(dt))
+        if (!this.fixed) {
+            // calculate acceleration
+            let acceleration = new Vector2(totalForce.x / this.mass(), totalForce.y / this.mass())
+            this.velocity = this.velocity.add(acceleration.multiplyScalar(dt))
         
-
-        // update position
-        this.position = this.position.add(this.velocity.multiplyScalar(dt))
+            // update position
+            this.position = this.position.add(this.velocity.multiplyScalar(dt))
+        
+        }
         for (let i of this.shapes) {
             if (i.type == "composite") {
                 (i as Composite).physicsStep(dt)
@@ -121,9 +106,10 @@ class Composite {
         }
     }
 
-    constructor(position: Vector2, ...items: (Composite | Shape)[]) {
+    constructor(position: Vector2, fixed: boolean, ...items: (Composite | Shape)[]) {
         this.shapes = items
         this.position = position
+        this.initialPosition = position.copy()
         this.name = `composite ${compositeIndex}`
         compositeIndex++
         this.appliedForces = [
@@ -132,6 +118,21 @@ class Composite {
                 position: this.centreOfMass()
             }
         ]
+        this.fixed = fixed
+    }
+
+    resetSimulation() {
+        this.position = this.initialPosition.copy()
+        this.velocity = this.initialVelocity.copy();
+        this.rotation = this.initialRotation;
+        
+        for (let i of this.shapes) {
+            if (i.type == "composite") {
+                (i as Composite).position = (i as Composite).initialPosition.copy();
+                (i as Composite).velocity = (i as Composite).initialVelocity.copy();
+                (i as Composite).rotation = (i as Composite).initialRotation;
+            }
+        }
     }
 }
 
@@ -146,8 +147,8 @@ class Line implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.moveTo(this.from.x * scaleX + offset.x, -(this.from.y * scaleY + offset.y))
-        ctx.lineTo(this.to.x * scaleX + offset.x, -(this.to.y * scaleY + offset.y))
+        ctx.moveTo((this.from.x + offset.x) * scaleX , -(this.from.y + offset.y) * scaleY)
+        ctx.lineTo((this.to.x + offset.x) * scaleX , -(this.to.y + offset.y) * scaleY)
         ctx.stroke()
         ctx.closePath()
         return null
@@ -164,7 +165,7 @@ class Line implements Shape {
     }
 
     mass() {
-        return this.to.length() - this.from.length() * this.density
+        return Math.abs(this.to.length() - this.from.length()) * this.density
     }
     
 }
@@ -179,7 +180,7 @@ class Ellipse implements Shape {
     draw(ctx: CanvasRenderingContext2D, offset: Vector2) {
         ctx.strokeStyle = this.strokeStyle
         ctx.beginPath()
-        ctx.ellipse(this.centre.x * scaleX + offset.x, -(this.centre.y * scaleY + offset.y), this.radius.x * scaleX, this.radius.y * scaleY, 0, 0, 360)
+        ctx.ellipse((this.centre.x + offset.x) * scaleX , -(this.centre.y + offset.y) * scaleY , this.radius.x * scaleX, this.radius.y * scaleY, 0, 0, 360)
         ctx.stroke()
         ctx.closePath()
         return null
@@ -201,8 +202,8 @@ class Ellipse implements Shape {
     }
 }
 
-var scaleX = 100; // 500 pixels per metre
-var scaleY = 100; // 500 pixels per metre
+var scaleX = 10; // 500 pixels per metre
+var scaleY = 10; // 500 pixels per metre
 
 var transform = new Vector2(0, 0) // in metres
 
@@ -216,8 +217,12 @@ export class Renderer {
         //     // new Ellipse(new Vector2(100, 200), new Vector2(50, 50), 1),
         // ),
 
-        new Composite(new Vector2(0,0),
-            // new Line(new Vector2(0,0), new Vector2(1,1), 1),
+        new Composite(new Vector2(0,0), true,
+            new Line(new Vector2(-10,-8), new Vector2(10,4), 1),
+
+        ),
+
+        new Composite(new Vector2(0,0), false,
             new Ellipse(new Vector2(0, 0), new Vector2(1, 1), 1),
             // new Ellipse(new Vector2(1, 2), new Vector2(0.5, 0.5), 1),
 
@@ -237,34 +242,53 @@ export class Renderer {
     
     lt = 0
     draw(t: number) {
-        transform.x = this.ctx.canvas.width/2
-        transform.y = -this.ctx.canvas.height/2
-        let dt = (t - this.lt) / (60 * 1000)
+        transform.x = (this.ctx.canvas.width/2)/scaleX
+        transform.y = (-this.ctx.canvas.height/2)/scaleY
+        let dt = (t - this.lt) / 1000
         this.lt = t
         this.ctx.clearRect(0,0, this.ctx.canvas.width, this.ctx.canvas.height)
         for (let i of this.shapes) {
             i.draw(this.ctx, transform)
         }
-        this.physicsStep(dt)
+        if (simulationStatus.V) {
+            this.physicsStep(dt)
+        }
         requestAnimationFrame((t)=>this.draw(t))
     }
 
     physicsStep(dt: number) {
         // need to see what forces need to be applied
-        
+        // to each composite at what point
+        // well check colliosns for each of teh shapes
 
+        // for (let i of this.shapes) {
+        //     let distance = 
+        // }
 
 
 
         for (let i of this.shapes) {
-            let f = -9.8 * i.mass()
-            i.appliedForces = [{
-                direction: new Vector2(0, f),
+            if (!i.fixed) {
+                let f = -9.8 * i.mass()
+                i.appliedForces = [
+                    {
+                        direction: new Vector2(0, f),
+                        position: i.centreOfMass()
+                    },
+                    {
+                        direction: new Vector2(-20, 0),
+                        position: i.centreOfMass()
+                    },
+                ]
+                i.physicsStep(dt)
+            }
+            
+        }
+    }
 
-                position: i.centreOfMass()
-            }]
-            console.log("mass:", f)
-            i.physicsStep(dt)
+    resetSimulation() {
+        for (let i of this.shapes) {
+            i.resetSimulation()
         }
     }
 
